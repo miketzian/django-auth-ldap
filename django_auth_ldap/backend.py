@@ -820,9 +820,34 @@ class _LDAPUser:
     def _bind(self):
         """
         Binds to the LDAP server with AUTH_LDAP_BIND_DN and
-        AUTH_LDAP_BIND_PASSWORD.
+        AUTH_LDAP_BIND_PASSWORD or AUTH_LDAP_BIND_SASL_MECHANISM
+        and AUTH_LDAP_BIND_SASL_CB_VALUE, if defined.
         """
-        self._bind_as(self.settings.BIND_DN, self.settings.BIND_PASSWORD, sticky=True)
+        if self.settings.BIND_SASL_MECHANISM:
+            self._bind_sasl(
+                self.settings.BIND_SASL_CB_VALUE,
+                self.settings.BIND_SASL_MECHANISM,
+                sticky=True,
+            )
+        else:
+            self._bind_as(
+                self.settings.BIND_DN, self.settings.BIND_PASSWORD, sticky=True
+            )
+
+    def _bind_sasl(self, cb_value_dict, sasl_mech, sticky=False):
+        """
+        This requires an appropriate cyrus-sasl-* library, ie cyrus-sasl-gssapi
+        """
+        # <github>/python-ldap/blob/master/Lib/ldap/sasl.py#L41
+        sasl_auth = ldap.sasl.sasl(cb_value_dict, sasl_mech)
+
+        # if the connection has been used for a bind with username/password (to verify)
+        # then we need to clear that before using sasl
+        # <github>/python-ldap/blob/master/Modules/LDAPObject.c#L580
+        # The bind_dn argument will be passed to the c library; howerver,
+        # normally it is not needed and should be an empty string.
+        self._get_connection().sasl_interactive_bind_s("", sasl_auth)
+        self._connection_bound = sticky
 
     def _bind_as(self, bind_dn, bind_password, sticky=False):
         """
@@ -833,6 +858,12 @@ class _LDAPUser:
         the life of this object. If False, then the caller only wishes to test
         the credentials, after which the connection will be considered unbound.
         """
+
+        if self.settings.BIND_SASL_MECHANISM and self._connection:
+            # Since an existing connection is likely to have used sasl
+            # and thus be unusable for binds, reset it first
+            self._connection = None
+
         self._get_connection().simple_bind_s(bind_dn, bind_password)
 
         self._connection_bound = sticky
@@ -1006,6 +1037,8 @@ class LDAPSettings:
         "BIND_AS_AUTHENTICATING_USER": False,
         "BIND_DN": "",
         "BIND_PASSWORD": "",
+        "BIND_SASL_CB_VALUE": "",
+        "BIND_SASL_MECHANISM": None,
         "CONNECTION_OPTIONS": {},
         "DENY_GROUP": None,
         "FIND_GROUP_PERMS": False,

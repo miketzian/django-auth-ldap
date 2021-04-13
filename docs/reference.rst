@@ -72,6 +72,28 @@ Default: ``''`` (Empty string)
 The password to use with :setting:`AUTH_LDAP_BIND_DN`.
 
 
+.. setting:: AUTH_LDAP_BIND_SASL_MECHANISM
+
+AUTH_LDAP_BIND_SASL_MECHANISM
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Default: ``None``
+
+The sasl mechanism to use when binding to the LDAP server with SASL. This
+option is ignored when authenticating a dn/password (i.e., for user login).
+
+
+.. setting:: AUTH_LDAP_BIND_SASL_CB_VALUE
+
+AUTH_LDAP_BIND_SASL_CB_VALUE
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Default: ``''`` (Empty string)
+
+The sasl cb value to use with :setting:`AUTH_LDAP_BIND_SASL_MECHANISM`,
+if required.
+
+
 .. setting:: AUTH_LDAP_CACHE_TIMEOUT
 
 AUTH_LDAP_CACHE_TIMEOUT
