@@ -836,17 +836,19 @@ class _LDAPUser:
 
     def _bind_sasl(self, cb_value_dict, sasl_mech, sticky=False):
         """
-        This requires an appropriate cyrus-sasl-* library, ie cyrus-sasl-gssapi
+        Binds to the LDAP server with SASL.
         """
-        # <github>/python-ldap/blob/master/Lib/ldap/sasl.py#L41
-        sasl_auth = ldap.sasl.sasl(cb_value_dict, sasl_mech)
+        # <github>/python-ldap/blob/<version>/Modules/LDAPObject.c#L580
 
-        # if the connection has been used for a bind with username/password (to verify)
-        # then we need to clear that before using sasl
-        # <github>/python-ldap/blob/master/Modules/LDAPObject.c#L580
-        # The bind_dn argument will be passed to the c library; howerver,
-        # normally it is not needed and should be an empty string.
-        self._get_connection().sasl_interactive_bind_s("", sasl_auth)
+        if not cb_value_dict and sasl_mech in ("GSSAPI", "EXTERNAL"):
+            self._get_connection().sasl_non_interactive_bind_s(sasl_mech)
+        else:
+            # <github>/python-ldap/blob/<version>/Lib/ldap/sasl.py#L41
+            sasl_auth = ldap.sasl.sasl(cb_value_dict, sasl_mech)
+            # The bind_dn argument will be passed to the c library; however,
+            # normally it is not needed and should be an empty string.
+            self._get_connection().sasl_interactive_bind_s("", sasl_auth)
+
         self._connection_bound = sticky
 
     def _bind_as(self, bind_dn, bind_password, sticky=False):
@@ -861,7 +863,12 @@ class _LDAPUser:
 
         if self.settings.BIND_SASL_MECHANISM and self._connection:
             # Since an existing connection is likely to have used sasl
-            # and thus be unusable for binds, reset it first
+            # and thus be unusable for simple binds, reset it first
+            try:
+                # disconnect
+                self._connection.unbind_s()
+            except BaseException as e:
+                logger.warn("Error unbinding connection %s", e)
             self._connection = None
 
         self._get_connection().simple_bind_s(bind_dn, bind_password)

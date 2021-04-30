@@ -512,9 +512,6 @@ class LDAPTest(TestCase):
 
     def test_search_bind_with_sasl_external_credentials(self):
         self._init_settings(
-            BIND_SASL_CB_VALUE={
-                ldap.sasl.CB_USER: "",
-            },
             BIND_SASL_MECHANISM="EXTERNAL",
             CONNECTION_OPTIONS={
                 ldap.OPT_X_TLS_CACERTFILE: self.server.cafile,
@@ -557,9 +554,6 @@ class LDAPTest(TestCase):
 
     def test_search_bind_with_bad_sasl_external_credentials(self):
         self._init_settings(
-            BIND_SASL_CB_VALUE={
-                ldap.sasl.CB_USER: "",
-            },
             BIND_SASL_MECHANISM="EXTERNAL",
             CONNECTION_OPTIONS={
                 ldap.OPT_X_TLS_CACERTFILE: self.server.cafile,
@@ -567,6 +561,45 @@ class LDAPTest(TestCase):
                 ldap.OPT_X_TLS_NEWCTX: 0,
             },
             START_TLS=True,
+            USER_SEARCH=LDAPSearch(
+                "ou=people,o=test", ldap.SCOPE_SUBTREE, "(uid=%(user)s)"
+            ),
+        )
+        backend = get_backend()
+
+        # user asserted by some other middleware
+        user = User.objects.create(username="alice")
+        user = backend.get_user(user.pk)
+
+        with self.assertRaisesMessage(ldap.LDAPError, "SASL"):
+            _ = user.ldap_user.dn
+
+    def test_search_bind_with_sasl_external_ldapi(self):
+        self._init_settings(
+            SERVER_URI=self.server.ldapi_uri,
+            BIND_SASL_MECHANISM="EXTERNAL",
+            USER_SEARCH=LDAPSearch(
+                "ou=people,o=test", ldap.SCOPE_SUBTREE, "(uid=%(user)s)"
+            ),
+        )
+        backend = get_backend()
+
+        # user asserted by some other middleware
+        user = User.objects.create(username="alice")
+        user = backend.get_user(user.pk)
+
+        self.assertIsNotNone(user)
+        self.assertIsNotNone(user.ldap_user)
+        self.assertEqual(user.ldap_user.dn, "uid=alice,ou=people,o=test")
+        self.assertTrue(user.ldap_user._connection_bound)
+
+    def test_search_bind_with_sasl_external_ldapi_invalid(self):
+        self._init_settings(
+            BIND_SASL_CB_VALUE={
+                ldap.sasl.CB_USER: "invalid_user",
+            },
+            SERVER_URI=self.server.ldapi_uri,
+            BIND_SASL_MECHANISM="EXTERNAL",
             USER_SEARCH=LDAPSearch(
                 "ou=people,o=test", ldap.SCOPE_SUBTREE, "(uid=%(user)s)"
             ),
